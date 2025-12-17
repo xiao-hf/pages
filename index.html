@@ -1,143 +1,272 @@
-function decodeUrlEncodedString(encodedStr) {
-    // 替换常见的URL编码字符
-    const urlEncodedChars = {
-        '%20': ' ', // 空格
-        '%21': '!', // 叹号
-        '%22': '"', // 双引号
-        '%23': '#', // 井号
-        '%24': '$', // 美元符号
-        '%25': '%', // 百分号
-        '%26': '&', // 和号
-        '%27': "'", // 单引号
-        '%28': '(', // 左括号
-        '%29': ')', // 右括号
-        '%2A': '*', // 星号
-        '%2B': '+', // 加号
-        '%2C': ',', // 逗号
-        '%2F': '/', // 斜杠
-        '%3A': ':', // 冒号
-        '%3B': ';', // 分号
-        '%3C': '<', // 小于号
-        '%3D': '=', // 等于号
-        '%3E': '>', // 大于号
-        '%3F': '?', // 问号
-        '%40': '@', // 花号
-        // ... 可以继续添加其他需要的编码
-    };
-
-    // 替换所有已知的URL编码字符
-    return encodedStr.replace(/%[0-9A-F]{2}/gi, function(match) {
-        return urlEncodedChars[match] || match; // 如果没有匹配的编码，则返回原字符
-    });
-}
-
-function getBase64ContentFromUrl(url) {
-    // 使用正则表达式匹配 'content' 参数
-    const regex = /(?:\?|&)(content=)([^&]+)/;
-    const match = url.match(regex);
-    if (match && match[2]) {
-        // 替换所有已知的URL编码字符并返回参数content的内容
-        return decodeURIComponent(decodeUrlEncodedString(match[2]))
-        
-    }
-    return null; // 如果没有匹配到，返回 null
-}
-const content = getBase64ContentFromUrl(window.location.search);
-
-// 压缩字符串
-function compressString(str) {
-    // 将字符串转换为Uint8Array
-    var input = new TextEncoder().encode(str);
-    // 使用pako进行压缩
-    var compressed = pako.deflate(input);
-    // 将压缩后的数据转换为Base64字符串
-    var compressedBase64 = btoa(String.fromCharCode(...compressed));
-    return compressedBase64;
-}
-
-// 解压缩字符串
-function decompressString(compressedBase64) {
-    try {
-        // 将Base64字符串转换为Uint8Array
-        var compressed = Uint8Array.from(atob(compressedBase64), c => c.charCodeAt(0));
-    } catch (error) {
-        console.log('Base64 error:', error);
-        // 不是Base64字符串，直接返回原文本
-        return compressedBase64;
-    }
-    
-    try {
-        // 使用pako进行解压缩
-        var decompressed = pako.inflate(compressed);
-    } catch (error) {
-        console.log('pako error:', error);
-        try {
-            // 不符合pako的字符串，将Uint8Array还原回原文本，再返回
-            var original_content = decodeURIComponent(escape(atob(btoa(String.fromCharCode.apply(null, compressed)))));
-            return original_content
-        } catch (error) {
-            console.log('decodeURIComponent error:', error);
-            // 不符合URI的格式，例如20个1，则返回20个1
-            return compressedBase64
-        }
-    }
-    
-    // 将Uint8Array转换回字符串
-    var decompressedString = new TextDecoder().decode(decompressed);
-    return decompressedString;
-}
-
-function getContentFromUrl() {
-    const content = getBase64ContentFromUrl(window.location.search);
-    if (content) {
-        // 假设这是从Python端获取的Base64编码的压缩数据
-        var base64EncodedCompressedData = content // 替换为您的Base64字符串
-
-        // 创建 pre 和 code 元素
-        var preElement = document.createElement('pre');
-        var codeElement = document.createElement('code');
-
-        // 输出解压后的数据
-        var result = decompressString(base64EncodedCompressedData);
-        hideLoader();
-        codeElement.innerHTML = result;
-        codeElement.className = 'language-python';
-        preElement.appendChild(codeElement);
-        document.body.appendChild(preElement);
-
-        // 使用Prism手动高亮元素
-        Prism.highlightElement(codeElement);
-    }else{
-        function readme(data) {
-            const md = window.markdownit();
-            // 假设这是你想要渲染的 Markdown 文本
-            const markdownText = data;
-            // 渲染 Markdown 并将其插入到页面中
-            const result = md.render(markdownText);
-
-            // 创建 pre 和 code 元素
-            var preElement = document.createElement('pre');
-            var codeElement = document.createElement('code');
-
-            hideLoader();
-            codeElement.className = 'language-markdown';
-            preElement.appendChild(codeElement);
-            document.body.appendChild(preElement);
-            // 使用Prism手动高亮元素
-            Prism.highlightElement(codeElement);
-            codeElement.innerHTML = result;
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>内容查看器</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
         }
 
-        fetch('https://raw.githubusercontent.com/JuneWaySue/DisplayContent/refs/heads/master/README.md')
-            .then(response => response.text())
-            .then(data => readme(data))
-            .catch(error => {
-                console.log('Error:', error);
-                readme('## 获取README.md文件内容失败！')
-            });
-    }
-}
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            padding: 20px;
+        }
 
-// 当页面加载完毕后，获取并展示内容
-window.onload = getContentFromUrl;
+        .container {
+            background: white;
+            border-radius: 16px;
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+            padding: 40px;
+            max-width: 800px;
+            width: 100%;
+            animation: fadeIn 0.5s ease-in;
+        }
 
+        @keyframes fadeIn {
+            from {
+                opacity: 0;
+                transform: translateY(20px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        .title {
+            font-size: 24px;
+            font-weight: 600;
+            color: #333;
+            margin-bottom: 20px;
+            text-align: center;
+        }
+
+        .content-box {
+            background: #f8f9fa;
+            border: 2px solid #e9ecef;
+            border-radius: 12px;
+            padding: 30px;
+            margin-bottom: 20px;
+            min-height: 150px;
+            max-height: 500px;
+            overflow-y: auto;
+            word-wrap: break-word;
+            white-space: pre-wrap;
+            font-size: 16px;
+            line-height: 1.6;
+            color: #333;
+        }
+
+        .empty-state {
+            text-align: center;
+            color: #999;
+            font-style: italic;
+        }
+
+        .copy-btn {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border: none;
+            padding: 14px 32px;
+            font-size: 16px;
+            font-weight: 600;
+            border-radius: 8px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            display: block;
+            margin: 0 auto;
+            box-shadow: 0 4px 15px rgba(102, 126, 234, 0.4);
+        }
+
+        .copy-btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 20px rgba(102, 126, 234, 0.6);
+        }
+
+        .copy-btn:active {
+            transform: translateY(0);
+        }
+
+        .copy-btn.copied {
+            background: linear-gradient(135deg, #11998e 0%, #38ef7d 100%);
+        }
+
+        .toast {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            background: #28a745;
+            color: white;
+            padding: 16px 24px;
+            border-radius: 8px;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+            opacity: 0;
+            transform: translateX(400px);
+            transition: all 0.3s ease;
+            font-weight: 500;
+            z-index: 1000;
+        }
+
+        .toast.show {
+            opacity: 1;
+            transform: translateX(0);
+        }
+
+        .info-text {
+            text-align: center;
+            color: #666;
+            font-size: 14px;
+            margin-top: 20px;
+        }
+
+        @media (max-width: 600px) {
+            .container {
+                padding: 24px;
+            }
+
+            .title {
+                font-size: 20px;
+            }
+
+            .content-box {
+                padding: 20px;
+                font-size: 14px;
+            }
+
+            .copy-btn {
+                padding: 12px 24px;
+                font-size: 14px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1 class="title">📋 内容查看器</h1>
+        <div class="content-box" id="contentBox">
+            <div class="empty-state">暂无内容</div>
+        </div>
+        <button class="copy-btn" id="copyBtn" onclick="copyContent()">
+            <span id="btnText">📄 复制内容</span>
+        </button>
+        <p class="info-text">访问 ?content=你的内容 来显示内容</p>
+    </div>
+
+    <div class="toast" id="toast">✓ 复制成功！</div>
+
+    <script>
+        // 获取URL参数
+        function getUrlParameter(name) {
+            const urlParams = new URLSearchParams(window.location.search);
+            return urlParams.get(name);
+        }
+
+        // 显示内容
+        function displayContent() {
+            const content = getUrlParameter('content');
+            const contentBox = document.getElementById('contentBox');
+            
+            if (content) {
+                // URL解码
+                const decodedContent = decodeURIComponent(content);
+                contentBox.textContent = decodedContent;
+                contentBox.classList.remove('empty-state');
+            } else {
+                contentBox.innerHTML = '<div class="empty-state">暂无内容</div>';
+            }
+        }
+
+        // 复制内容
+        async function copyContent() {
+            const contentBox = document.getElementById('contentBox');
+            const content = contentBox.textContent;
+            const copyBtn = document.getElementById('copyBtn');
+            const btnText = document.getElementById('btnText');
+            const toast = document.getElementById('toast');
+
+            if (!content || content === '暂无内容') {
+                showToast('⚠️ 没有可复制的内容', '#ffc107');
+                return;
+            }
+
+            try {
+                // 使用现代Clipboard API
+                await navigator.clipboard.writeText(content);
+                
+                // 按钮反馈
+                copyBtn.classList.add('copied');
+                btnText.textContent = '✓ 已复制';
+                
+                // 显示提示
+                showToast('✓ 复制成功！', '#28a745');
+                
+                // 2秒后恢复按钮
+                setTimeout(() => {
+                    copyBtn.classList.remove('copied');
+                    btnText.textContent = '📄 复制内容';
+                }, 2000);
+
+            } catch (err) {
+                // 降级方案：使用传统方法
+                const textArea = document.createElement('textarea');
+                textArea.value = content;
+                textArea.style.position = 'fixed';
+                textArea.style.left = '-999999px';
+                document.body.appendChild(textArea);
+                textArea.select();
+                
+                try {
+                    document.execCommand('copy');
+                    showToast('✓ 复制成功！', '#28a745');
+                    
+                    copyBtn.classList.add('copied');
+                    btnText.textContent = '✓ 已复制';
+                    setTimeout(() => {
+                        copyBtn.classList.remove('copied');
+                        btnText.textContent = '📄 复制内容';
+                    }, 2000);
+                } catch (err2) {
+                    showToast('❌ 复制失败', '#dc3545');
+                }
+                
+                document.body.removeChild(textArea);
+            }
+        }
+
+        // 显示Toast提示
+        function showToast(message, color) {
+            const toast = document.getElementById('toast');
+            toast.textContent = message;
+            toast.style.background = color;
+            toast.classList.add('show');
+            
+            setTimeout(() => {
+                toast.classList.remove('show');
+            }, 3000);
+        }
+
+        // 页面加载时显示内容
+        window.onload = displayContent;
+
+        // 监听键盘快捷键 Ctrl+C
+        document.addEventListener('keydown', (e) => {
+            if ((e.ctrlKey || e.metaKey) && e.key === 'c') {
+                const selection = window.getSelection();
+                if (!selection || selection.toString().length === 0) {
+                    e.preventDefault();
+                    copyContent();
+                }
+            }
+        });
+    </script>
+</body>
+</html>
